@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-# Example of low level interaction with a BLE UART device that has an RX and TX
-# characteristic for receiving and sending data.  This doesn't use any service
-# implementation and instead just manipulates the services and characteristics
-# on a device.  See the uart_service.py example for a simpler UART service
-# example that uses a high level service implementation.
-# Author: Tony DiCola
 import logging
 import time
 import uuid
