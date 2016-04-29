@@ -1,5 +1,7 @@
 var noble = require('noble');
 
+const PERIPHERAL_NAME = "Train";
+
 noble.on('stateChange', function(state) {
     if (state === 'poweredOn') {
         noble.startScanning();
@@ -9,6 +11,10 @@ noble.on('stateChange', function(state) {
 });
 
 noble.on('discover', function(peripheral) {
+    if ((peripheral.advertisement.localName == PERIPHERAL_NAME) && (peripheral.connectable == true)) {
+		console.log("Found Train Node with id: " + peripheral.id);
+	}
+    
     console.log('peripheral discovered (' + peripheral.id +
                             ' with address <' + peripheral.address +    ', ' + peripheral.addressType + '>,' +
                             ' connectable ' + peripheral.connectable + ',' +
