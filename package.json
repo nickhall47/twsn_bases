@@ -1,0 +1,19 @@
+{
+  "name": "twsn_bases",
+  "version": "1.0.0",
+  "description": "Train Wireless Sensor Network Bases",
+  "main": "find_all.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickhall47/twsn_bases.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nickhall47/twsn_bases/issues"
+  },
+  "homepage": "https://github.com/nickhall47/twsn_bases#readme"
+}
