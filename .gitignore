@@ -1,2 +1,18 @@
-node_modules/
+# Log files for each node
 node_*.log
+
+# Modifications to noble lib to allow custom peripheral connection rates
+#!node_modules/noble/lib/hci-socket/hci.js
+!node_modules/
+
+node_modules/*
+!node_modules/noble/
+
+node_modules/noble/*
+!node_modules/noble/lib
+
+node_modules/noble/lib/*
+!node_modules/noble/lib/hci-socket/
+
+node_modules/noble/lib/hci-socket/*
+!node_modules/noble/lib/hci-socket/hci.js
