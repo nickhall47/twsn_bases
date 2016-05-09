@@ -1,4 +1,5 @@
 var noble = require("noble");
+var fs = require("fs");
 
 const PERIPHERAL_NAME = "Train";
 const SENSOR_SERVICE_UUID = "0000000000001000800000805f9b34f0";
@@ -39,10 +40,15 @@ noble.on("discover", function(peripheral) {
 						}
 					});
 					
+					// Create file for node
+					peripheral.logFile = fs.createWriteStream("node_" + peripheral.id + ".log", { flags: "a" });
+					
 					// Notify ch
 					if (peripheral.strainCh != null) {
 						peripheral.strainCh.on("data", function(data, isNotification) {
-							console.log(peripheral.id + ": " + data.readUInt16BE(0));
+							//console.log(peripheral.id + ": " + data.readUInt16BE(0));
+							//console.log(data.readUInt16BE(0) + ",");
+							peripheral.logFile.write(data.readUInt16BE(0) + ",");
 						});
 						
 						//peripheral.strainCh.notify(true);
@@ -80,9 +86,11 @@ function main() {
 			if (peripheral.strainCh != null) {
 				console.log("Enabling notify for " + peripheral.uuid + "...");
 				peripheral.strainCh.notify(true);
+			} else {
+				console.log("Strain Ch not found for " + peripheral.uuid);
 			}
 		});
-    }, 2000);
+    }, 3000);
 }
 
 main();
