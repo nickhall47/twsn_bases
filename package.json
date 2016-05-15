@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/nickhall47/twsn_bases/issues"
   },
-  "homepage": "https://github.com/nickhall47/twsn_bases#readme"
+  "homepage": "https://github.com/nickhall47/twsn_bases#readme",
+  "dependencies": {
+    "sqlite3": "^3.1.3"
+  }
 }
