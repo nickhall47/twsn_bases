@@ -18,7 +18,7 @@ function initDb() {
 	// Open file
 	var dbFile = "nodes.db";
 	var dbExists = fs.existsSync(dbFile);
-
+	
 	if (!dbExists) {
 		fs.openSync(dbFile, "w");
 	}
@@ -46,52 +46,69 @@ noble.on("stateChange", function(state) {
 });
 
 noble.on("discover", function(peripheral) {
+	// Check name and connectable
 	if ((peripheral.advertisement.localName == PERIPHERAL_NAME) && (peripheral.connectable == true)) {
+		// Check service
 		if (JSON.stringify(peripheral.advertisement.serviceUuids).includes(SENSOR_SERVICE_UUID)) {
+			// Log
 			console.log("Found Train Node with id: " + peripheral.id);
 			
+			// Add to array
 			peripherals[peripherals.length] = peripheral;
-		
-			// Connect
-			peripherals[peripherals.length-1].connect(function(error) {
-				console.log("Connecting to: " + peripheral.id);
-		
-				peripheral.discoverAllServicesAndCharacteristics(function(error, services, characteristics) {
-					console.log("Discovering services of " + peripheral.id);
-					peripheral.strainCh = null;
-					
-					// Find ch's
-					characteristics.forEach(function(ch, chId) {
-						if (ch.uuid == STRAIN_CH_UUID) {
-							console.log("Found strain characteristic");
-							peripheral.strainCh = ch;
-						}
-					});
-					
-					// Create file for node
-					//peripheral.logFile = fs.createWriteStream("node_" + peripheral.id + ".log", { flags: "a" });
-					
-					// Prepare SQL stmt
-					peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?)");
-					
-					// Notify ch
-					if (peripheral.strainCh != null) {
-						peripheral.strainCh.on("data", function(data, isNotification) {
-							//console.log(peripheral.id + ": " + data.readUInt16BE(0));
-							//peripheral.logFile.write(data.readUInt16BE(0) + ",");
-							peripheral.strainStmt.run(peripheral.id, data.readUInt16BE(0));
-						});
-					}
-				});
-			});
 		}
 	}
 
     console.log();
 });
 
+function connectPeripheral(peripheral) {
+	peripheral.connect(function(error) {
+		console.log("Connecting to: " + peripheral.id);
+			
+		peripheral.discoverAllServicesAndCharacteristics(function(error, services, characteristics) {
+			console.log("Discovering services of " + peripheral.id);
+			peripheral.strainCh = null;
+			
+			// Find ch's
+			characteristics.forEach(function(ch, chId) {
+				if (ch.uuid == STRAIN_CH_UUID) {
+					console.log("Found strain characteristic");
+					peripheral.strainCh = ch;
+				}
+			});
+			
+			// Create file for node
+			//peripheral.logFile = fs.createWriteStream("node_" + peripheral.id + ".log", { flags: "a" });
+			
+			// Prepare SQL stmt
+			peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?)");
+			
+			// Notify ch
+			if (peripheral.strainCh != null) {
+				peripheral.strainCh.on("data", function(data, isNotification) {
+					//console.log(peripheral.id + ": " + data.readUInt16BE(0));
+					//peripheral.logFile.write(data.readUInt16BE(0) + ",");
+					peripheral.strainStmt.run(peripheral.id, data.readUInt16BE(0));
+				});
+			}
+		});
+	});
+};
+
+function enableNotifyOnPeripherals() {
+	// Enable notify's
+	peripherals.forEach(function(peripheral) {
+		if (peripheral.strainCh != null) {
+			console.log("Enabling notify for " + peripheral.uuid);
+			peripheral.strainCh.notify(true);
+		} else {
+			console.log("Strain Ch not found for " + peripheral.uuid);
+		}
+	});
+};
+
 var exitHandler = function exitHandler() {
-	console.log("\nPreparing to exit...");
+	console.log("\nPREPARING TO EXIT...");
 	
 	// Close all peripheral connections
     peripherals.forEach(function(peripheral) {
@@ -124,17 +141,23 @@ function main() {
 	// Init DB
 	initDb();
 	
-	// Wait before turning on notifys
-	setTimeout(function(){
-        peripherals.forEach(function(peripheral) {
-			if (peripheral.strainCh != null) {
-				console.log("Enabling notify for " + peripheral.uuid + "...");
-				peripheral.strainCh.notify(true);
-			} else {
-				console.log("Strain Ch not found for " + peripheral.uuid);
-			}
-		});
-    }, 3000);
+	
+	// Wait before connecting
+	console.log("\nPress any key to stop recv ad mode, and connect to peripherals");
+	
+	process.stdin.setRawMode(true);
+	process.stdin.resume();
+	
+	process.stdin.on("data", function(){
+		// Disable 'press any key' to enable Ctrl-C exit
+		process.stdin.setRawMode(false);
+		
+		// Connect to peripherals
+		peripherals.forEach(connectPeripheral);
+		
+		// Wait before turning on notify's
+		setTimeout(enableNotifyOnPeripherals, 8000);
+    });
 }
 
 main();
