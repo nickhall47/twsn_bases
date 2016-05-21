@@ -16,3 +16,7 @@ node_modules/noble/lib/*
 
 node_modules/noble/lib/hci-socket/*
 !node_modules/noble/lib/hci-socket/hci.js
+
+# sqlite3 files
+nodes.db
+nodes_db_out.csv
