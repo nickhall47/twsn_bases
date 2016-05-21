@@ -2,14 +2,13 @@
 var noble = require("noble");
 var fs = require("fs");
 var sqlite3 = require("sqlite3").verbose();
+var event_detection = require("./event_detection.js");
 
 // Constants
 const PERIPHERAL_NAME = "Train";
 const SENSOR_SERVICE_UUID = "0000000000001000800000805f9b34f0";
 const ACCELE_CH_UUID = "0000000000001000800000805f9b34f1";
 const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
-const EVENT_THRESHOLD = 100;
-const PREV_VALUES_LENGTH = 3;
 
 // Globals
 var peripherals = [];
@@ -90,12 +89,7 @@ function connectPeripheral(peripheral) {
 			peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?, ?)");
 			
 			// Prepare event detection code
-			peripheral.prevValues = new Array(PREV_VALUES_LENGTH);
-			for (var i = 0; i < PREV_VALUES_LENGTH; i++) {
-				peripheral.prevValues[i] = -1;
-			}
-			peripheral.prevValuesPointer = 0;
-			peripheral.eventDirection = -1;
+			event_detection.eventDetectorInit(peripheral);
 			
 			// Notify ch
 			if (peripheral.strainCh != null) {
@@ -105,53 +99,14 @@ function connectPeripheral(peripheral) {
 					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readUInt16BE(0));
 					
 					// Check for event
-					eventChecker(peripheral, data.readUInt16BE(0));
+					event_detection.eventDetect(peripheral, data.readUInt16BE(0));
 				});
 			}
 		});
 	});
 };
 
-function eventChecker(peripheral, currentValue) {
-	// Check for no initial values
-	var initialValues = false;
-	for (var i = 0; i < PREV_VALUES_LENGTH; i++) {
-		if (peripheral.prevValues[i] == -1) {
-			initialValues = true;
-			break;
-		}
-	}
-	
-	if (!initialValues) {
-		// Get avg
-		var avg = 0;
-		for (var i = 0; i < PREV_VALUES_LENGTH; i++) {
-			avg += peripheral.prevValues[i];
-		}
-		avg /= PREV_VALUES_LENGTH;
-		
-		// Check for event
-		if (avg + EVENT_THRESHOLD < currentValue) { // Rapid increase
-			if (peripheral.eventDirection != 1) {
-				console.log("Event type 1: " + avg + " < " + currentValue);
-				peripheral.eventDirection = 1;
-			}
-		}
-		else if (avg - EVENT_THRESHOLD > currentValue) { // Rapid decrease
-			if (peripheral.eventDirection != 0) {
-				console.log("Event type 0: " + avg + " > " + currentValue);
-				peripheral.eventDirection = 0;
-			}
-		}
-	}
-	
-	// Update prev values
-	peripheral.prevValues[peripheral.prevValuesPointer] = currentValue;
-	peripheral.prevValuesPointer++;
-	if (peripheral.prevValuesPointer >= PREV_VALUES_LENGTH) {
-		peripheral.prevValuesPointer = 0;
-	}
-};
+
 
 function enableNotifyOnPeripherals() {
 	// Enable notify's
