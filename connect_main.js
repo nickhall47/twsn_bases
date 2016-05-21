@@ -8,6 +8,8 @@ const PERIPHERAL_NAME = "Train";
 const SENSOR_SERVICE_UUID = "0000000000001000800000805f9b34f0";
 const ACCELE_CH_UUID = "0000000000001000800000805f9b34f1";
 const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
+const EVENT_THRESHOLD = 100;
+const PREV_VALUES_LENGTH = 3;
 
 // Globals
 var peripherals = [];
@@ -87,16 +89,68 @@ function connectPeripheral(peripheral) {
 			// Prepare SQL stmt
 			peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?, ?)");
 			
+			// Prepare event detection code
+			peripheral.prevValues = new Array(PREV_VALUES_LENGTH);
+			for (var i = 0; i < PREV_VALUES_LENGTH; i++) {
+				peripheral.prevValues[i] = -1;
+			}
+			peripheral.prevValuesPointer = 0;
+			peripheral.eventDirection = -1;
+			
 			// Notify ch
 			if (peripheral.strainCh != null) {
 				peripheral.strainCh.on("data", function(data, isNotification) {
 					//console.log(peripheral.id + ": " + data.readUInt16BE(0));
 					//peripheral.logFile.write(data.readUInt16BE(0) + ",");
 					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readUInt16BE(0));
+					
+					// Check for event
+					eventChecker(peripheral, data.readUInt16BE(0));
 				});
 			}
 		});
 	});
+};
+
+function eventChecker(peripheral, currentValue) {
+	// Check for no initial values
+	var initialValues = false;
+	for (var i = 0; i < PREV_VALUES_LENGTH; i++) {
+		if (peripheral.prevValues[i] == -1) {
+			initialValues = true;
+			break;
+		}
+	}
+	
+	if (!initialValues) {
+		// Get avg
+		var avg = 0;
+		for (var i = 0; i < PREV_VALUES_LENGTH; i++) {
+			avg += peripheral.prevValues[i];
+		}
+		avg /= PREV_VALUES_LENGTH;
+		
+		// Check for event
+		if (avg + EVENT_THRESHOLD < currentValue) { // Rapid increase
+			if (peripheral.eventDirection != 1) {
+				console.log("Event type 1: " + avg + " < " + currentValue);
+				peripheral.eventDirection = 1;
+			}
+		}
+		else if (avg - EVENT_THRESHOLD > currentValue) { // Rapid decrease
+			if (peripheral.eventDirection != 0) {
+				console.log("Event type 0: " + avg + " > " + currentValue);
+				peripheral.eventDirection = 0;
+			}
+		}
+	}
+	
+	// Update prev values
+	peripheral.prevValues[peripheral.prevValuesPointer] = currentValue;
+	peripheral.prevValuesPointer++;
+	if (peripheral.prevValuesPointer >= PREV_VALUES_LENGTH) {
+		peripheral.prevValuesPointer = 0;
+	}
 };
 
 function enableNotifyOnPeripherals() {
@@ -119,7 +173,7 @@ var exitHandler = function exitHandler() {
         console.log("Disconnecting from " + peripheral.uuid + "...");
         
         // End BLE connection
-        peripheral.disconnect( function(){
+        peripheral.disconnect(function() {
 			console.log("Disconnected from " + peripheral.uuid);
 			
 			// Finalise SQL statements
@@ -129,8 +183,14 @@ var exitHandler = function exitHandler() {
     
     // Close DB
     console.log("\nClosing sqlite3 DB...");
-	dbNodes.close();
-	console.log("Closed sqlite3 DB");
+	dbNodes.close(function(error) {
+		if (error == null) {
+			console.log("Closed sqlite3 DB");
+		}
+		else {
+			console.log("Unable to close sqlite3 DB. " + error);
+		}
+	});
 
     // End process after 1.5 more seconds
     setTimeout(function(){

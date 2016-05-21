@@ -20,3 +20,4 @@ node_modules/noble/lib/hci-socket/*
 # sqlite3 files
 nodes.db
 nodes_db_out.csv
+*node*.csv
