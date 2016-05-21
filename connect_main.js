@@ -12,6 +12,7 @@ const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
 // Globals
 var peripherals = [];
 var dbNodes;
+var numConnectedNodes = 0;
 
 
 function initDb() {
@@ -30,7 +31,7 @@ function initDb() {
 		// Create table
 		if (!dbExists) {
 			console.log("Creating sqlite3 DB table...");
-			dbNodes.run("CREATE TABLE strains (node_id TEXT, value TEXT)");
+			dbNodes.run("CREATE TABLE strains (timestamp TEXT, node_id TEXT, value TEXT)");
 			console.log("Created sqlite3 DB table");
 		}
 	});
@@ -52,6 +53,7 @@ noble.on("discover", function(peripheral) {
 		if (JSON.stringify(peripheral.advertisement.serviceUuids).includes(SENSOR_SERVICE_UUID)) {
 			// Log
 			console.log("Found Train Node with id: " + peripheral.id);
+			console.log("Total Train nodes found: " + (peripherals.length+1));
 			
 			// Add to array
 			peripherals[peripherals.length] = peripheral;
@@ -64,6 +66,8 @@ noble.on("discover", function(peripheral) {
 function connectPeripheral(peripheral) {
 	peripheral.connect(function(error) {
 		console.log("Connecting to: " + peripheral.id);
+		numConnectedNodes++;
+		console.log("Total Train nodes connected: " + numConnectedNodes);
 			
 		peripheral.discoverAllServicesAndCharacteristics(function(error, services, characteristics) {
 			console.log("Discovering services of " + peripheral.id);
@@ -81,14 +85,14 @@ function connectPeripheral(peripheral) {
 			//peripheral.logFile = fs.createWriteStream("node_" + peripheral.id + ".log", { flags: "a" });
 			
 			// Prepare SQL stmt
-			peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?)");
+			peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?, ?)");
 			
 			// Notify ch
 			if (peripheral.strainCh != null) {
 				peripheral.strainCh.on("data", function(data, isNotification) {
 					//console.log(peripheral.id + ": " + data.readUInt16BE(0));
 					//peripheral.logFile.write(data.readUInt16BE(0) + ",");
-					peripheral.strainStmt.run(peripheral.id, data.readUInt16BE(0));
+					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readUInt16BE(0));
 				});
 			}
 		});
@@ -156,7 +160,7 @@ function main() {
 		peripherals.forEach(connectPeripheral);
 		
 		// Wait before turning on notify's
-		setTimeout(enableNotifyOnPeripherals, 8000);
+		setTimeout(enableNotifyOnPeripherals, 10000);
     });
 }
 
