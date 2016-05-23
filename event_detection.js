@@ -35,13 +35,13 @@ module.exports = {
 			// Check for event
 			if (avg + EVENT_THRESHOLD < currentValue) { // Rapid increase
 				if (peripheral.eventDirection != 1) {
-					console.log("Event type 1: " + avg + " < " + currentValue);
+					console.log("Event type 1 @ " + peripheral.id + ": " + avg + " < " + currentValue);
 					peripheral.eventDirection = 1;
 				}
 			}
 			else if (avg - EVENT_THRESHOLD > currentValue) { // Rapid decrease
 				if (peripheral.eventDirection != 0) {
-					console.log("Event type 0: " + avg + " > " + currentValue);
+					console.log("Event type 0 @ " + peripheral.id + ": " + avg + " > " + currentValue);
 					peripheral.eventDirection = 0;
 				}
 			}

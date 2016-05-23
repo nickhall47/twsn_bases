@@ -1,3 +1,6 @@
 # Export sqlite3 to csv
 sqlite3 -header -csv nodes.db "select * from strains;" > nodes_db_out.csv
 sqlite3 -header -csv nodes.db "select * from strains where node_id='00a0500e2a15';" > single_node_db_out.csv
+
+# View single node's data
+sqlite3 nodes.db "select * from strains where node_id='00a05018252d';" -separator "  |  "

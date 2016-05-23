@@ -170,12 +170,13 @@ function main() {
 	process.stdin.on("data", function(){
 		// Disable 'press any key' to enable Ctrl-C exit
 		process.stdin.setRawMode(false);
-		
+		console.log("\nConnecting to peripherals...");		
+
 		// Connect to peripherals
 		peripherals.forEach(connectPeripheral);
 		
 		// Wait before turning on notify's
-		setTimeout(enableNotifyOnPeripherals, 10000);
+		setTimeout(enableNotifyOnPeripherals, 12000);
     });
 }
 
