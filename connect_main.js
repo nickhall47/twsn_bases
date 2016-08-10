@@ -9,6 +9,7 @@ const PERIPHERAL_NAME = "Train";
 const SENSOR_SERVICE_UUID = "0000000000001000800000805f9b34f0";
 const ACCELE_CH_UUID = "0000000000001000800000805f9b34f1";
 const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
+const EVENT_DETECTION_ENABLED = 0;
 
 // Globals
 var peripherals = [];
@@ -93,7 +94,9 @@ function connectPeripheral(peripheral) {
 			peripheral.acceleStmt = dbNodes.prepare("INSERT INTO acceles VALUES (?, ?, ?, ?, ?)");
 			
 			// Prepare event detection code
-			event_detection.eventDetectorInit(peripheral);
+			if (EVENT_DETECTION_ENABLED == 1) {
+				event_detection.eventDetectorInit(peripheral);
+			}
 			
 			// Notify ch
 			if (peripheral.strainCh != null) {
@@ -102,7 +105,9 @@ function connectPeripheral(peripheral) {
 					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readUInt16BE(0));
 					
 					// Check for event
-					event_detection.eventDetect(peripheral, data.readUInt16BE(0));
+					if (EVENT_DETECTION_ENABLED == 1) {
+						event_detection.eventDetect(peripheral, data.readUInt16BE(0));
+					}
 				});
 			}
 			if (peripheral.acceleCh != null) {
@@ -193,7 +198,7 @@ function main() {
 		peripherals.forEach(connectPeripheral);
 		
 		// Wait before turning on notify's
-		setTimeout(enableNotifyOnPeripherals, 12000);
+		setTimeout(enableNotifyOnPeripherals, 5000);
     });
 }
 
