@@ -4,12 +4,15 @@ var fs = require("fs");
 var sqlite3 = require("sqlite3").verbose();
 var event_detection = require("./event_detection.js");
 
+// Flags
+const EVENT_DETECTION_ENABLED_FLAG = 0;
+const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
+
 // Constants
 const PERIPHERAL_NAME = "Train";
 const SENSOR_SERVICE_UUID = "0000000000001000800000805f9b34f0";
 const ACCELE_CH_UUID = "0000000000001000800000805f9b34f1";
 const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
-const EVENT_DETECTION_ENABLED = 0;
 
 // Globals
 var peripherals = [];
@@ -94,7 +97,7 @@ function connectPeripheral(peripheral) {
 			peripheral.acceleStmt = dbNodes.prepare("INSERT INTO acceles VALUES (?, ?, ?, ?, ?)");
 			
 			// Prepare event detection code
-			if (EVENT_DETECTION_ENABLED == 1) {
+			if (EVENT_DETECTION_ENABLED_FLAG == 1) {
 				event_detection.eventDetectorInit(peripheral);
 			}
 			
@@ -105,16 +108,16 @@ function connectPeripheral(peripheral) {
 					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readUInt16BE(0));
 					
 					// Check for event
-					if (EVENT_DETECTION_ENABLED == 1) {
+					if (EVENT_DETECTION_ENABLED_FLAG == 1) {
 						event_detection.eventDetect(peripheral, data.readUInt16BE(0));
 					}
 				});
 			}
 			if (peripheral.acceleCh != null) {
 				peripheral.acceleCh.on("data", function(data, isNotification) {
-					//console.log(data.readUInt16BE(0) + "," + data.readUInt16BE(1) + "," + data.readUInt16BE(2));
+					//console.log(data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
 					peripheral.acceleStmt.run(Date.now(), peripheral.id, 
-											  data.readUInt16BE(0), data.readUInt16BE(1), data.readUInt16BE(2));
+											  data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2));
 				});
 			}
 		});
@@ -170,15 +173,32 @@ var exitHandler = function exitHandler() {
 		}
 	});
 
-    // End process after 1.5 more seconds
-    setTimeout(function(){
-        process.exit();
-    }, 1500);
+	// Shutdown if enabled
+	if (AUTO_SHUTDOWN_TIMEOUT_FLAG == 1) {
+		console.log("Shutting down in 15 seconds...");
+		setTimeout(function(){
+			var sys = require("sys")
+			var exec = require("child_process").exec;
+			function puts(error, stdout, stderr) { sys.puts(stdout) }
+			exec("sudo shutdown now", puts);
+		}, 15000);
+	}
+	else {
+		// End process after 1.5 more seconds
+		setTimeout(function(){
+			process.exit();
+		}, 1500);
+	}
 }
 
 function main() {
 	// Enable exit handler
 	process.on("SIGINT", exitHandler);
+	
+	// Enable auto-shutdown timeout if enabled
+	if (AUTO_SHUTDOWN_TIMEOUT_FLAG == 1) {
+		setTimeout(exitHandler, 2700000); // Car Test = 2700000 = 45 mins
+	}
 	
 	// Init DB
 	initDb();
