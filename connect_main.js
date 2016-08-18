@@ -19,6 +19,7 @@ const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
 var peripherals = [];
 var dbNodes;
 var numConnectedNodes = 0;
+var numNotifiesEnabled = 0;
 var calledConnectToPeripherals = 0;
 
 
@@ -52,6 +53,7 @@ noble.on("warning", function(msg) {
 
 noble.on("stateChange", function(state) {
     if (state === "poweredOn") {
+		console.log("Scanning...");
         noble.startScanning(SENSOR_SERVICE_UUID);
     } else {
         noble.stopScanning();
@@ -80,23 +82,23 @@ noble.on("discover", function(peripheral) {
 
 function connectPeripheral(peripheral) {
 	peripheral.connect(function(error) {
-		console.log("Connecting to: " + peripheral.id);
+		console.log(peripheral.id + ": Connecting...");
 		numConnectedNodes++;
 		console.log("Total Train nodes connected: " + numConnectedNodes);
 			
 		peripheral.discoverAllServicesAndCharacteristics(function(error, services, characteristics) {
-			console.log("Discovering services of " + peripheral.id);
+			console.log(peripheral.id + ": Discovering services...");
 			peripheral.strainCh = null;
 			peripheral.acceleCh = null;
 			
 			// Find ch's
 			characteristics.forEach(function(ch, chId) {
 				if (ch.uuid == STRAIN_CH_UUID) {
-					console.log("Found strain characteristic");
+					console.log(peripheral.id + ": Found strain characteristic");
 					peripheral.strainCh = ch;
 				}
 				if (ch.uuid == ACCELE_CH_UUID) {
-					console.log("Found accele characteristic");
+					console.log(peripheral.id + ": Found accele characteristic");
 					peripheral.acceleCh = ch;
 				}
 			});
@@ -127,7 +129,7 @@ function connectPeripheral(peripheral) {
 			}
 			if (peripheral.acceleCh != null) {
 				peripheral.acceleCh.on("data", function(data, isNotification) {
-					//console.log(data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
+					//console.log(peripheral.id + ": " + data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
 					var gps = gps_handler.getGpsLatLon();
 					
 					peripheral.acceleStmt.run(Date.now(), peripheral.id, 
@@ -144,17 +146,21 @@ function connectPeripheral(peripheral) {
 
 function enableNotify(peripheral) {
 	if (peripheral.strainCh != null) {
-		console.log("Enabling strain notify for " + peripheral.uuid);
+		console.log(peripheral.id + ": Enabling strain notify");
 		peripheral.strainCh.notify(true);
+		numNotifiesEnabled++;
+		console.log("Total notifies enabled: " + numNotifiesEnabled + "/" + 2*numConnectedNodes);
 	} else {
-		console.log("Strain Ch not found for " + peripheral.uuid);
+		console.log(peripheral.id + ": Strain Ch not found");
 	}
 	
 	if (peripheral.acceleCh != null) {
-		console.log("Enabling accele notify for " + peripheral.uuid);
+		console.log(peripheral.id + ": Enabling accele notify");
 		peripheral.acceleCh.notify(true);
+		numNotifiesEnabled++;
+		console.log("Total notifies enabled: " + numNotifiesEnabled + "/" + 2*numConnectedNodes);
 	} else {
-		console.log("Accele Ch not found for " + peripheral.uuid);
+		console.log(peripheral.id + ": Accele Ch not found");
 	}
 };
 
@@ -163,11 +169,11 @@ var exitHandler = function exitHandler() {
 	
 	// Close all peripheral connections
     peripherals.forEach(function(peripheral) {
-        console.log("Disconnecting from " + peripheral.uuid + "...");
+        console.log(peripheral.id + ": Disconnecting...");
         
         // End BLE connection
         peripheral.disconnect(function() {
-			console.log("Disconnected from " + peripheral.uuid);
+			console.log(peripheral.id + ": Disconnected");
 			
 			// Finalise SQL statements
 			if ( typeof peripheral.strainStmt !== 'undefined' && peripheral.strainStmt ) {
