@@ -19,6 +19,7 @@ const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
 var peripherals = [];
 var dbNodes;
 var numConnectedNodes = 0;
+var calledConnectToPeripherals = 0;
 
 
 function initDb() {
@@ -44,10 +45,14 @@ function initDb() {
 	});
 }
 
+noble.on("warning", function(msg) {
+    console.log("NOBLE WARNING: " + msg);
+});
+
 
 noble.on("stateChange", function(state) {
     if (state === "poweredOn") {
-        noble.startScanning();
+        noble.startScanning(SENSOR_SERVICE_UUID);
     } else {
         noble.stopScanning();
     }
@@ -68,6 +73,9 @@ noble.on("discover", function(peripheral) {
 	}
 
     console.log();
+    
+    // Keep scanning
+    noble.startScanning(SENSOR_SERVICE_UUID);
 });
 
 function connectPeripheral(peripheral) {
@@ -127,29 +135,27 @@ function connectPeripheral(peripheral) {
 											  gps.lat, gps.lon);
 				});
 			}
+			
+			// Wait before turning on notify's
+			setTimeout(enableNotify.bind(null, peripheral), 2000);
 		});
 	});
 };
 
-
-
-function enableNotifyOnPeripherals() {
-	// Enable notify's
-	peripherals.forEach(function(peripheral) {
-		if (peripheral.strainCh != null) {
-			console.log("Enabling strain notify for " + peripheral.uuid);
-			peripheral.strainCh.notify(true);
-		} else {
-			console.log("Strain Ch not found for " + peripheral.uuid);
-		}
-		
-		if (peripheral.acceleCh != null) {
-			console.log("Enabling accele notify for " + peripheral.uuid);
-			peripheral.acceleCh.notify(true);
-		} else {
-			console.log("Accele Ch not found for " + peripheral.uuid);
-		}
-	});
+function enableNotify(peripheral) {
+	if (peripheral.strainCh != null) {
+		console.log("Enabling strain notify for " + peripheral.uuid);
+		peripheral.strainCh.notify(true);
+	} else {
+		console.log("Strain Ch not found for " + peripheral.uuid);
+	}
+	
+	if (peripheral.acceleCh != null) {
+		console.log("Enabling accele notify for " + peripheral.uuid);
+		peripheral.acceleCh.notify(true);
+	} else {
+		console.log("Accele Ch not found for " + peripheral.uuid);
+	}
 };
 
 var exitHandler = function exitHandler() {
@@ -164,8 +170,12 @@ var exitHandler = function exitHandler() {
 			console.log("Disconnected from " + peripheral.uuid);
 			
 			// Finalise SQL statements
-			peripheral.strainStmt.finalize();
-			peripheral.acceleStmt.finalize();
+			if ( typeof peripheral.strainStmt !== 'undefined' && peripheral.strainStmt ) {
+				peripheral.strainStmt.finalize();
+			}
+			if ( typeof peripheral.acceleStmt !== 'undefined' && peripheral.acceleStmt ) {
+				peripheral.acceleStmt.finalize();
+			}
         });
     });
     
@@ -179,7 +189,7 @@ var exitHandler = function exitHandler() {
 			console.log("Unable to close sqlite3 DB. " + error);
 		}
 	});
-
+	
 	// Shutdown if enabled
 	if (AUTO_SHUTDOWN_TIMEOUT_FLAG == 1) {
 		console.log("Shutting down in 15 seconds...");
@@ -191,10 +201,23 @@ var exitHandler = function exitHandler() {
 		}, 15000);
 	}
 	else {
-		// End process after 1.5 more seconds
+		// End process after 2 more seconds
 		setTimeout(function(){
 			process.exit();
-		}, 1500);
+		}, 2000);
+	}
+}
+
+function connectToPeripherals() {
+	if (calledConnectToPeripherals == 0) { // So only called once (either any key or timeout)
+		calledConnectToPeripherals = 1;
+		
+		// Disable 'press any key', to enable Ctrl-C exit
+		process.stdin.setRawMode(false);
+		console.log("\nConnecting to peripherals...");
+
+		// Connect to peripherals
+		peripherals.forEach(connectPeripheral);
 	}
 }
 
@@ -211,22 +234,19 @@ function main() {
 	initDb();
 	
 	// Wait before connecting
-	console.log("\nPress any key to stop recv ad mode, and connect to peripherals");
+	console.log("\nPress any key to stop recv ad mode, and connect to peripherals (will auto-connect in 60 seconds)");
 	
+	// Detect any key
 	process.stdin.setRawMode(true);
 	process.stdin.resume();
 	
+	// Connect on any key
 	process.stdin.on("data", function(){
-		// Disable 'press any key' to enable Ctrl-C exit
-		process.stdin.setRawMode(false);
-		console.log("\nConnecting to peripherals...");
-
-		// Connect to peripherals
-		peripherals.forEach(connectPeripheral);
-		
-		// Wait before turning on notify's
-		setTimeout(enableNotifyOnPeripherals, 5000);
+		connectToPeripherals();
     });
+    
+    // Otherwise connect on timeout
+    setTimeout(connectToPeripherals, 60000);
 }
 
 main();
