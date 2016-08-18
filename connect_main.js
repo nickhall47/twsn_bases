@@ -3,6 +3,7 @@ var noble = require("noble");
 var fs = require("fs");
 var sqlite3 = require("sqlite3").verbose();
 var event_detection = require("./event_detection.js");
+var gps_handler = require("./gps_handler.js");
 
 // Flags
 const EVENT_DETECTION_ENABLED_FLAG = 0;
@@ -36,8 +37,8 @@ function initDb() {
 		// Create table
 		if (!dbExists) {
 			console.log("Creating sqlite3 DB tables...");
-			dbNodes.run("CREATE TABLE strains (timestamp TEXT, node_id TEXT, value TEXT)");
-			dbNodes.run("CREATE TABLE acceles (timestamp INTEGER, node_id TEXT, x INTEGER, y INTEGER, z INTEGER)");
+			dbNodes.run("CREATE TABLE strains (timestamp INTEGER, node_id TEXT, value INTEGER, lat INTEGER, lon INTEGER)");
+			dbNodes.run("CREATE TABLE acceles (timestamp INTEGER, node_id TEXT, x INTEGER, y INTEGER, z INTEGER, lat INTEGER, lon INTEGER)");
 			console.log("Created sqlite3 DB tables");
 		}
 	});
@@ -93,8 +94,8 @@ function connectPeripheral(peripheral) {
 			});
 			
 			// Prepare SQL stmt
-			peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?, ?)");
-			peripheral.acceleStmt = dbNodes.prepare("INSERT INTO acceles VALUES (?, ?, ?, ?, ?)");
+			peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?, ?, ?, ?)");
+			peripheral.acceleStmt = dbNodes.prepare("INSERT INTO acceles VALUES (?, ?, ?, ?, ?, ?, ?)");
 			
 			// Prepare event detection code
 			if (EVENT_DETECTION_ENABLED_FLAG == 1) {
@@ -105,7 +106,10 @@ function connectPeripheral(peripheral) {
 			if (peripheral.strainCh != null) {
 				peripheral.strainCh.on("data", function(data, isNotification) {
 					//console.log(peripheral.id + ": " + data.readUInt16BE(0));
-					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readUInt16BE(0));
+					var gps = gps_handler.getGpsLatLon();
+					
+					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readUInt16BE(0),
+											  gps.lat, gps.lon);
 					
 					// Check for event
 					if (EVENT_DETECTION_ENABLED_FLAG == 1) {
@@ -116,8 +120,11 @@ function connectPeripheral(peripheral) {
 			if (peripheral.acceleCh != null) {
 				peripheral.acceleCh.on("data", function(data, isNotification) {
 					//console.log(data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
+					var gps = gps_handler.getGpsLatLon();
+					
 					peripheral.acceleStmt.run(Date.now(), peripheral.id, 
-											  data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2));
+											  data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2),
+											  gps.lat, gps.lon);
 				});
 			}
 		});
@@ -200,8 +207,9 @@ function main() {
 		setTimeout(exitHandler, 2700000); // Car Test = 2700000 = 45 mins
 	}
 	
-	// Init DB
+	// Init stuff
 	initDb();
+	gps_handler.gpsHandlerInit();
 	
 	// Wait before connecting
 	console.log("\nPress any key to stop recv ad mode, and connect to peripherals");
@@ -212,7 +220,7 @@ function main() {
 	process.stdin.on("data", function(){
 		// Disable 'press any key' to enable Ctrl-C exit
 		process.stdin.setRawMode(false);
-		console.log("\nConnecting to peripherals...");		
+		console.log("\nConnecting to peripherals...");
 
 		// Connect to peripherals
 		peripherals.forEach(connectPeripheral);
