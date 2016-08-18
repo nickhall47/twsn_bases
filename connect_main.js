@@ -209,7 +209,6 @@ function main() {
 	
 	// Init stuff
 	initDb();
-	gps_handler.gpsHandlerInit();
 	
 	// Wait before connecting
 	console.log("\nPress any key to stop recv ad mode, and connect to peripherals");

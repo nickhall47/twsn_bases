@@ -1,7 +1,5 @@
 // Libraries
 var gpsd = require("node-gpsd");
-var util = require("util");
-var spawn = require("child_process").spawn;
 
 // Globals
 var gpsdListener = new gpsd.Listener();
@@ -20,10 +18,6 @@ gpsdListener.connect(function() {
 });
 
 module.exports = {
-	gpsHandlerInit: function () {
-		var enableGpsProcess = spawn("./enable_nodejs_gps_access.sh");
-	},
-	
 	getGpsLatLon: function () {
 		return {
 			lat: currLat,
