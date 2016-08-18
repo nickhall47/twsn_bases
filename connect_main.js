@@ -226,12 +226,20 @@ function connectToPeripherals() {
 	if (calledConnectToPeripherals == 0) { // So only called once (either any key or timeout)
 		calledConnectToPeripherals = 1;
 		
-		// Disable 'press any key', to enable Ctrl-C exit
-		//process.stdin.setRawMode(false);
-		console.log("\nConnecting to peripherals...");
+		if (peripherals.length == 0) { // No peripherals discovered
+			calledConnectToPeripherals = 0;
+			
+			console.log("\nPress any key to stop recv ad mode, and connect to peripherals (will auto-connect in 60 seconds)");
+			setTimeout(connectToPeripherals, 60000);
+		}
+		else {
+			// Disable 'press any key', to enable Ctrl-C exit
+			//process.stdin.setRawMode(false);
+			console.log("\nConnecting to peripherals...");
 
-		// Connect to peripherals
-		peripherals.forEach(connectPeripheral);
+			// Connect to peripherals
+			peripherals.forEach(connectPeripheral);
+		}
 	}
 }
 

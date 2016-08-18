@@ -21,3 +21,4 @@ node_modules/noble/lib/hci-socket/*
 nodes.db
 nodes_db_out.csv
 *node*.csv
+packet_loss_analysis.csv
