@@ -10,6 +10,7 @@ var gps_handler = require("./gps_handler.js");
 // Flags
 const EVENT_DETECTION_ENABLED_FLAG = 0;
 const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
+const MAX_NUM_NODES = 8; // Optional (Set to 0 to have no max)
 
 // Constants
 const PERIPHERAL_NAME = "Train";
@@ -73,6 +74,11 @@ noble.on("discover", function(peripheral) {
 			
 			// Add to array
 			peripherals[peripherals.length] = peripheral;
+			
+			// Check if reached max
+			if ((MAX_NUM_NODES != 0) && (peripherals.length >= MAX_NUM_NODES)) {
+				connectToPeripherals();
+			}
 		}
 	}
 
@@ -230,8 +236,9 @@ function connectToPeripherals() {
 }
 
 function main() {
-	// Enable exit handler
+	// Enable exit handlers
 	process.on("SIGINT", exitHandler);
+	process.on("SIGTERM", exitHandler);
 	
 	// Enable auto-shutdown timeout if enabled
 	if (AUTO_SHUTDOWN_TIMEOUT_FLAG == 1) {
