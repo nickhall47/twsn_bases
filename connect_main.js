@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 // Libraries
 var noble = require("noble");
 var fs = require("fs");
@@ -219,7 +221,7 @@ function connectToPeripherals() {
 		calledConnectToPeripherals = 1;
 		
 		// Disable 'press any key', to enable Ctrl-C exit
-		process.stdin.setRawMode(false);
+		//process.stdin.setRawMode(false);
 		console.log("\nConnecting to peripherals...");
 
 		// Connect to peripherals
@@ -243,13 +245,15 @@ function main() {
 	console.log("\nPress any key to stop recv ad mode, and connect to peripherals (will auto-connect in 60 seconds)");
 	
 	// Detect any key
-	process.stdin.setRawMode(true);
+	// setRawMode will fail if not TTY but ReadStream instead
+	// (i.e. will fail when running automatically through systemd, but will be fine when run manually through the terminal)
+	/*process.stdin.setRawMode(true);
 	process.stdin.resume();
 	
 	// Connect on any key
 	process.stdin.on("data", function(){
 		connectToPeripherals();
-    });
+	});*/
     
     // Otherwise connect on timeout
     setTimeout(connectToPeripherals, 60000);

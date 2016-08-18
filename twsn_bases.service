@@ -1,0 +1,13 @@
+[Unit]
+Description=Train Wireless Sensor Network Base
+
+[Service]
+Type=simple
+ExecStart=/home/pi/twsn_bases/connect_main.js
+Restart=always
+Environment=PATH=/usr/local/bin
+Environment=NODE_ENV=production
+WorkingDirectory=/home/pi/twsn_bases/
+
+[Install]
+WantedBy=multi-user.target
