@@ -4,13 +4,18 @@
 var noble = require("noble");
 var fs = require("fs");
 var sqlite3 = require("sqlite3").verbose();
+
 var event_detection = require("./event_detection.js");
 var gps_handler = require("./gps_handler.js");
+var StrainDataPoint = require("./StrainDataPoint");
+var AcceleDataPoint = require("./AcceleDataPoint");
+
 
 // Flags
 const EVENT_DETECTION_ENABLED_FLAG = 0;
 const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
-const MAX_NUM_NODES = 8; // Optional (Set to 0 to have no max)
+const MAX_NUM_NODES = 3; // Optional (Set to 0 to have no max)
+const MAX_DATA_BEFORE_INSERT = 800; // ~10 secs worth of data in standard config
 
 // Constants
 const PERIPHERAL_NAME = "Train";
@@ -20,10 +25,18 @@ const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
 
 // Globals
 var peripherals = [];
+
 var dbNodes;
+var strainStmt;
+var acceleStmt;
+
 var numConnectedNodes = 0;
 var numNotifiesEnabled = 0;
 var calledConnectToPeripherals = 0;
+
+var strainDataCache = [];
+var acceleDataCache = [];
+
 
 
 function initDb() {
@@ -47,6 +60,10 @@ function initDb() {
 			console.log("Created sqlite3 DB tables");
 		}
 	});
+	
+	// Prepare SQL stmt
+	strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?, ?, ?, ?)");
+	acceleStmt = dbNodes.prepare("INSERT INTO acceles VALUES (?, ?, ?, ?, ?, ?, ?)");
 }
 
 noble.on("warning", function(msg) {
@@ -111,10 +128,6 @@ function connectPeripheral(peripheral) {
 				}
 			});
 			
-			// Prepare SQL stmt
-			peripheral.strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?, ?, ?, ?)");
-			peripheral.acceleStmt = dbNodes.prepare("INSERT INTO acceles VALUES (?, ?, ?, ?, ?, ?, ?)");
-			
 			// Prepare event detection code
 			if (EVENT_DETECTION_ENABLED_FLAG == 1) {
 				event_detection.eventDetectorInit(peripheral);
@@ -126,8 +139,15 @@ function connectPeripheral(peripheral) {
 					//console.log(peripheral.id + ": " + data.readInt16BE(0));
 					var gps = gps_handler.getGpsLatLon();
 					
-					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readInt16BE(0),
-											  gps.lat, gps.lon);
+					// Save data to cache
+					strainDataCache.push(new StrainDataPoint(Date.now(), peripheral.id,
+														data.readInt16BE(0),
+														gps.lat, gps.lon));
+					
+					// Bulk DB insert when cache is full
+					if (strainDataCache.length >= MAX_DATA_BEFORE_INSERT) {
+						writeToStrainDB();
+					}
 					
 					// Check for event
 					if (EVENT_DETECTION_ENABLED_FLAG == 1) {
@@ -140,15 +160,52 @@ function connectPeripheral(peripheral) {
 					//console.log(peripheral.id + ": " + data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
 					var gps = gps_handler.getGpsLatLon();
 					
-					peripheral.acceleStmt.run(Date.now(), peripheral.id, 
-											  data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2),
-											  gps.lat, gps.lon);
+					// Save data to cache
+					acceleDataCache.push(new AcceleDataPoint(Date.now(), peripheral.id, 
+														data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2),
+														gps.lat, gps.lon));
+					
+					// Bulk DB insert when cache is full
+					if (acceleDataCache.length >= MAX_DATA_BEFORE_INSERT) {
+						writeToAcceleDB();
+					}
 				});
 			}
 			
 			// Wait before turning on notify's
 			setTimeout(enableNotify.bind(null, peripheral), 2000);
 		});
+	});
+};
+
+function writeToStrainDB() {
+	dbNodes.serialize(function() {
+		dbNodes.run("begin transaction");
+		
+		// Add cache to DB until empty
+		while (strainDataCache.length > 0) {
+			var datapoint = strainDataCache.shift(); // dequeue
+			strainStmt.run(datapoint.timestamp, datapoint.id,
+						   datapoint.value, 
+						   datapoint.lat, datapoint.lon);
+		}
+		
+		dbNodes.run("commit");
+	});
+};
+function writeToAcceleDB() {
+	dbNodes.serialize(function() {
+		dbNodes.run("begin transaction");
+		
+		// Add cache to DB until empty
+		while (acceleDataCache.length > 0) {
+			var datapoint = acceleDataCache.shift(); // dequeue
+			acceleStmt.run(datapoint.timestamp, datapoint.id, 
+						   datapoint.x, datapoint.y, datapoint.z, 
+						   datapoint.lat, datapoint.lon);
+		}
+		
+		dbNodes.run("commit");
 	});
 };
 
@@ -182,27 +239,33 @@ var exitHandler = function exitHandler() {
         // End BLE connection
         peripheral.disconnect(function() {
 			console.log(peripheral.id + ": Disconnected");
-			
-			// Finalise SQL statements
-			if ( typeof peripheral.strainStmt !== 'undefined' && peripheral.strainStmt ) {
-				peripheral.strainStmt.finalize();
-			}
-			if ( typeof peripheral.acceleStmt !== 'undefined' && peripheral.acceleStmt ) {
-				peripheral.acceleStmt.finalize();
-			}
+			numConnectedNodes--;
         });
     });
     
-    // Close DB
-    console.log("\nClosing sqlite3 DB...");
-	dbNodes.close(function(error) {
-		if (error == null) {
-			console.log("Closed sqlite3 DB");
-		}
-		else {
-			console.log("Unable to close sqlite3 DB. " + error);
-		}
-	});
+    setTimeout(function(){
+		// Write final datapoints
+		console.log("\nWriting final datapoints...");
+		writeToStrainDB();
+		writeToAcceleDB();
+		
+		// Close DB
+		strainStmt.finalize();
+		acceleStmt.finalize();
+		
+		console.log("Closing sqlite3 DB...");
+		dbNodes.close(function(error) {
+			if (error == null) {
+				console.log("Closed sqlite3 DB");
+				
+				// End process now
+				process.exit();
+			}
+			else {
+				console.log("Unable to close sqlite3 DB. " + error);
+			}
+		});
+	}, 1500);
 	
 	// Shutdown if enabled
 	if (AUTO_SHUTDOWN_TIMEOUT_FLAG == 1) {
@@ -215,10 +278,10 @@ var exitHandler = function exitHandler() {
 		}, 15000);
 	}
 	else {
-		// End process after 2 more seconds
+		// End process after 15 more seconds if db doesn't close in time
 		setTimeout(function(){
 			process.exit();
-		}, 2000);
+		}, 15000);
 	}
 }
 
