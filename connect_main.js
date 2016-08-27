@@ -123,15 +123,15 @@ function connectPeripheral(peripheral) {
 			// Notify ch
 			if (peripheral.strainCh != null) {
 				peripheral.strainCh.on("data", function(data, isNotification) {
-					//console.log(peripheral.id + ": " + data.readUInt16BE(0));
+					//console.log(peripheral.id + ": " + data.readInt16BE(0));
 					var gps = gps_handler.getGpsLatLon();
 					
-					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readUInt16BE(0),
+					peripheral.strainStmt.run(Date.now(), peripheral.id, data.readInt16BE(0),
 											  gps.lat, gps.lon);
 					
 					// Check for event
 					if (EVENT_DETECTION_ENABLED_FLAG == 1) {
-						event_detection.eventDetect(peripheral, data.readUInt16BE(0));
+						event_detection.eventDetect(peripheral, data.readInt16BE(0));
 					}
 				});
 			}
