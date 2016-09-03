@@ -14,7 +14,7 @@ var AcceleDataPoint = require("./AcceleDataPoint");
 // Flags
 const EVENT_DETECTION_ENABLED_FLAG = 0;
 const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
-const MAX_NUM_NODES = 3; // Optional (Set to 0 to have no max)
+const MAX_NUM_NODES = 8; // Optional (Set to 0 to have no max)
 const MAX_DATA_BEFORE_INSERT = 800; // ~10 secs worth of data in standard config
 
 // Constants
@@ -33,6 +33,7 @@ var acceleStmt;
 var numConnectedNodes = 0;
 var numNotifiesEnabled = 0;
 var calledConnectToPeripherals = 0;
+var checkAllDisconnectedInterval;
 
 var strainDataCache = [];
 var acceleDataCache = [];
@@ -243,29 +244,43 @@ var exitHandler = function exitHandler() {
         });
     });
     
-    setTimeout(function(){
-		// Write final datapoints
-		console.log("\nWriting final datapoints...");
-		writeToStrainDB();
-		writeToAcceleDB();
-		
-		// Close DB
-		strainStmt.finalize();
-		acceleStmt.finalize();
-		
-		console.log("Closing sqlite3 DB...");
-		dbNodes.close(function(error) {
-			if (error == null) {
-				console.log("Closed sqlite3 DB");
-				
-				// End process now
-				process.exit();
-			}
-			else {
-				console.log("Unable to close sqlite3 DB. " + error);
-			}
-		});
-	}, 1500);
+    // Continue exiting procedure if all disconnected, 
+    // or in 5 seconds, whichever happens sooner
+    var closeDbAndExitDelay = setTimeout(closeDbAndExit, 5000);
+    
+    checkAllDisconnectedInterval = setInterval(function(){
+		if (numConnectedNodes <= 0) {
+			clearTimeout(closeDbAndExitDelay);
+			clearInterval(checkAllDisconnectedInterval);
+			closeDbAndExit();
+		}
+	}, 300);
+}
+
+function closeDbAndExit() {
+	clearInterval(checkAllDisconnectedInterval);
+	
+	// Write final datapoints
+	console.log("\nWriting final datapoints...");
+	writeToStrainDB();
+	writeToAcceleDB();
+	
+	// Close DB
+	strainStmt.finalize();
+	acceleStmt.finalize();
+	
+	console.log("Closing sqlite3 DB...");
+	dbNodes.close(function(error) {
+		if (error == null) {
+			console.log("Closed sqlite3 DB");
+			
+			// End process now
+			process.exit();
+		}
+		else {
+			console.log("Unable to close sqlite3 DB. " + error);
+		}
+	});
 	
 	// Shutdown if enabled
 	if (AUTO_SHUTDOWN_TIMEOUT_FLAG == 1) {
@@ -283,7 +298,7 @@ var exitHandler = function exitHandler() {
 			process.exit();
 		}, 15000);
 	}
-}
+};
 
 function connectToPeripherals() {
 	if (calledConnectToPeripherals == 0) { // So only called once (either any key or timeout)
