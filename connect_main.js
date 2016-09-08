@@ -9,12 +9,13 @@ var event_detection = require("./event_detection.js");
 var gps_handler = require("./gps_handler.js");
 var StrainDataPoint = require("./StrainDataPoint");
 var AcceleDataPoint = require("./AcceleDataPoint");
+var EventDataPoint = require("./EventDataPoint");
 
 
 // Flags
-const EVENT_DETECTION_ENABLED_FLAG = 0;
+const EVENT_DETECTION_ENABLED_FLAG = 1;
 const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
-const MAX_NUM_NODES = 8; // Optional (Set to 0 to have no max)
+const MAX_NUM_NODES = 4; // Optional (Set to 0 to have no max)
 const MAX_DATA_BEFORE_INSERT = 800; // ~10 secs worth of data in standard config
 
 // Constants
@@ -29,6 +30,7 @@ var peripherals = [];
 var dbNodes;
 var strainStmt;
 var acceleStmt;
+var eventStmt;
 
 var numConnectedNodes = 0;
 var numNotifiesEnabled = 0;
@@ -37,6 +39,7 @@ var checkAllDisconnectedInterval;
 
 var strainDataCache = [];
 var acceleDataCache = [];
+var eventDataCache = [];
 
 
 
@@ -58,6 +61,7 @@ function initDb() {
 			console.log("Creating sqlite3 DB tables...");
 			dbNodes.run("CREATE TABLE strains (timestamp INTEGER, node_id TEXT, value INTEGER, lat INTEGER, lon INTEGER)");
 			dbNodes.run("CREATE TABLE acceles (timestamp INTEGER, node_id TEXT, x INTEGER, y INTEGER, z INTEGER, lat INTEGER, lon INTEGER)");
+			dbNodes.run("CREATE TABLE events (timestamp INTEGER, node_id TEXT, value INTEGER, type INTEGER, lat INTEGER, lon INTEGER)");
 			console.log("Created sqlite3 DB tables");
 		}
 	});
@@ -65,6 +69,7 @@ function initDb() {
 	// Prepare SQL stmt
 	strainStmt = dbNodes.prepare("INSERT INTO strains VALUES (?, ?, ?, ?, ?)");
 	acceleStmt = dbNodes.prepare("INSERT INTO acceles VALUES (?, ?, ?, ?, ?, ?, ?)");
+	eventStmt = dbNodes.prepare("INSERT INTO events VALUES (?, ?, ?, ?, ?, ?)");
 }
 
 noble.on("warning", function(msg) {
@@ -141,7 +146,8 @@ function connectPeripheral(peripheral) {
 					var gps = gps_handler.getGpsLatLon();
 					
 					// Save data to cache
-					strainDataCache.push(new StrainDataPoint(Date.now(), peripheral.id,
+					var now = Date.now();
+					strainDataCache.push(new StrainDataPoint(now, peripheral.id,
 														data.readInt16BE(0),
 														gps.lat, gps.lon));
 					
@@ -151,9 +157,9 @@ function connectPeripheral(peripheral) {
 					}
 					
 					// Check for event
-					if (EVENT_DETECTION_ENABLED_FLAG == 1) {
+					/*if (EVENT_DETECTION_ENABLED_FLAG == 1) {
 						event_detection.eventDetect(peripheral, data.readInt16BE(0));
-					}
+					}*/
 				});
 			}
 			if (peripheral.acceleCh != null) {
@@ -162,13 +168,30 @@ function connectPeripheral(peripheral) {
 					var gps = gps_handler.getGpsLatLon();
 					
 					// Save data to cache
-					acceleDataCache.push(new AcceleDataPoint(Date.now(), peripheral.id, 
+					var now = Date.now();
+					acceleDataCache.push(new AcceleDataPoint(now, peripheral.id, 
 														data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2),
 														gps.lat, gps.lon));
 					
 					// Bulk DB insert when cache is full
 					if (acceleDataCache.length >= MAX_DATA_BEFORE_INSERT) {
 						writeToAcceleDB();
+					}
+					
+					// Check for event
+					if (EVENT_DETECTION_ENABLED_FLAG == 1) {
+						var valueToCheck = data.readInt16BE(1);
+						
+						var eventTypeDetected = event_detection.eventDetect(peripheral, valueToCheck);
+						
+						if (eventTypeDetected != 0) {
+							eventDataCache.push(new EventDataPoint(now, peripheral.id,
+															valueToCheck, eventTypeDetected,
+															gps.lat, gps.lon));
+							if (eventDataCache.length > MAX_DATA_BEFORE_INSERT) {
+								writeToEventDB();
+							}
+						}
 					}
 				});
 			}
@@ -203,6 +226,21 @@ function writeToAcceleDB() {
 			var datapoint = acceleDataCache.shift(); // dequeue
 			acceleStmt.run(datapoint.timestamp, datapoint.id, 
 						   datapoint.x, datapoint.y, datapoint.z, 
+						   datapoint.lat, datapoint.lon);
+		}
+		
+		dbNodes.run("commit");
+	});
+};
+function writeToEventDB() {
+	dbNodes.serialize(function() {
+		dbNodes.run("begin transaction");
+		
+		// Add cache to DB until empty
+		while (eventDataCache.length > 0) {
+			var datapoint = eventDataCache.shift(); // dequeue
+			eventStmt.run(datapoint.timestamp, datapoint.id,
+						   datapoint.value, datapoint.type,
 						   datapoint.lat, datapoint.lon);
 		}
 		
@@ -264,10 +302,12 @@ function closeDbAndExit() {
 	console.log("\nWriting final datapoints...");
 	writeToStrainDB();
 	writeToAcceleDB();
+	writeToEventDB();
 	
 	// Close DB
 	strainStmt.finalize();
 	acceleStmt.finalize();
+	eventStmt.finalize();
 	
 	console.log("Closing sqlite3 DB...");
 	dbNodes.close(function(error) {
