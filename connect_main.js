@@ -15,8 +15,9 @@ var EventDataPoint = require("./EventDataPoint");
 // Flags
 const EVENT_DETECTION_ENABLED_FLAG = 1;
 const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
-const MAX_NUM_NODES = 4; // Optional (Set to 0 to have no max)
-const MAX_DATA_BEFORE_INSERT = 800; // ~10 secs worth of data in standard config
+const MAX_NUM_NODES = 1; // Optional (Set to 0 to have no max)
+const MAX_DATA_BEFORE_INSERT = MAX_NUM_NODES*600; // ~60 secs worth of data in standard config
+const MAX_DATA_BEFORE_INSERT_EVENTS = MAX_NUM_NODES*60;
 
 // Constants
 const PERIPHERAL_NAME = "Train";
@@ -188,7 +189,7 @@ function connectPeripheral(peripheral) {
 							eventDataCache.push(new EventDataPoint(now, peripheral.id,
 															valueToCheck, eventTypeDetected,
 															gps.lat, gps.lon));
-							if (eventDataCache.length > MAX_DATA_BEFORE_INSERT) {
+							if (eventDataCache.length > MAX_DATA_BEFORE_INSERT_EVENTS) {
 								writeToEventDB();
 							}
 						}
