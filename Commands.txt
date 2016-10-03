@@ -4,3 +4,10 @@ sqlite3 -header -csv nodes.db "select * from strains where node_id='00a0500e2a15
 
 # View single node's data
 sqlite3 nodes.db "select * from strains where node_id='00a05018252d';" -separator "  |  "
+
+
+# Control
+sudo journalctl -f -u twsn_bases
+sudo systemctl stop twsn_bases.service 
+sudo systemctl start twsn_bases.service 
+
