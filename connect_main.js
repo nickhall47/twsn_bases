@@ -3,7 +3,7 @@
 // Libraries
 var noble = require("noble");
 var fs = require("fs");
-var dgram = require("dgram");
+var net = require("net");
 
 var event_detection = require("./event_detection.js");
 var StrainDataPoint = require("./StrainDataPoint");
@@ -16,7 +16,7 @@ var EventDataPoint = require("./EventDataPoint");
 // Flags
 const EVENT_DETECTION_ENABLED_FLAG = 0;
 const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
-const MAX_NUM_NODES = 2; // Optional (Set to 0 to have no max)
+const MAX_NUM_NODES = 1; // Optional (Set to 0 to have no max)
 const MAX_DATA_BEFORE_INSERT = MAX_NUM_NODES*600; // ~60 secs worth of data in standard config
 const MAX_DATA_BEFORE_INSERT_EVENTS = MAX_NUM_NODES*60;
 
@@ -26,8 +26,8 @@ const SENSOR_SERVICE_UUID = "0000000000001000800000805f9b34f0";
 const ACCELE_CH_UUID = "0000000000001000800000805f9b34f1";
 const STRAIN_CH_UUID = "0000000000001000800000805f9b34f2";
 
-var PORT = 55056;
-var BROADCAST_ADDRESS = "169.254.255.255";
+var SERVER_PORT = 55056;
+var SERVER_ADDRESS = "192.168.10.10";
 
 
 // Globals
@@ -42,14 +42,15 @@ var strainDataCache = [];
 var acceleDataCache = [];
 var eventDataCache = [];
 
-var udpClient;
+var tcpClient;
 
 
-function initUdpConnection() {
-	udpClient = dgram.createSocket("udp4");
+function initTcpConnection() {
+	tcpClient = new net.Socket();
 	
-	udpClient.bind(PORT, function() {
-		udpClient.setBroadcast(true);
+	tcpClient.connect(SERVER_PORT, SERVER_ADDRESS);
+	tcpClient.on("connect", function() {
+		console.log("Connected to TCP server");
 	});
 }
 
@@ -126,14 +127,13 @@ function connectPeripheral(peripheral) {
 					//console.log(peripheral.id + ": " + data.readInt16BE(0));
 					
 					// Create JSON from data
-					var data = (new StrainDataPoint(Date.now(), peripheral.id, data.readInt16BE(0)
+					var jsonString = (new StrainDataPoint(Date.now(), peripheral.id, data.readInt16BE(0)
 													)).toJsonString();
 					
-					// Send UDP
-					var msg = new Buffer(data);
-					udpClient.send(msg, 0, msg.length, PORT, BROADCAST_ADDRESS, function(err, bytes) {
-						if (err) throw err;
-					});
+					// Send TCP if connected
+					if (tcpClient.connecting == false) {
+						tcpClient.write(jsonString);
+					}
 				});
 			}
 			if (peripheral.acceleCh != null) {
@@ -141,15 +141,14 @@ function connectPeripheral(peripheral) {
 					//console.log(peripheral.id + ": " + data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
 					
 					// Create JSON from data
-					var data = (new AcceleDataPoint(Date.now(), peripheral.id,
+					var jsonString = (new AcceleDataPoint(Date.now(), peripheral.id,
 													data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2)
 													)).toJsonString();
 					
-					// Send UDP
-					var msg = new Buffer(data);
-					udpClient.send(msg, 0, msg.length, PORT, BROADCAST_ADDRESS, function(err, bytes) {
-						if (err) throw err;
-					});
+					// Send TCP if connected
+					if (tcpClient.connecting == false) {
+						tcpClient.write(jsonString);
+					}
 				});
 			}
 			
@@ -203,7 +202,7 @@ var exitHandler = function exitHandler() {
 		if (numConnectedNodes <= 0) {
 			clearTimeout(exitAnywayDelay);
 			clearInterval(checkAllDisconnectedInterval);
-			udpClient.close();
+			tcpClient.destroy();
 			process.exit();
 		}
 	}, 300);
@@ -239,7 +238,7 @@ function main() {
 	}
 	
 	// Init stuff
-	initUdpConnection();
+	initTcpConnection();
 	
 	// Wait before connecting
 	console.log("\nPress any key to stop recv ad mode, and connect to peripherals (will auto-connect in 60 seconds)");
