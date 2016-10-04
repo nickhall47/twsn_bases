@@ -6,7 +6,6 @@ var fs = require("fs");
 var sqlite3 = require("sqlite3").verbose();
 
 var event_detection = require("./event_detection.js");
-var gps_handler = require("./gps_handler.js");
 var StrainDataPoint = require("./StrainDataPoint");
 var AcceleDataPoint = require("./AcceleDataPoint");
 var EventDataPoint = require("./EventDataPoint");
@@ -15,7 +14,7 @@ var EventDataPoint = require("./EventDataPoint");
 // Flags
 const EVENT_DETECTION_ENABLED_FLAG = 0;
 const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
-const MAX_NUM_NODES = 6; // Optional (Set to 0 to have no max)
+const MAX_NUM_NODES = 1; // Optional (Set to 0 to have no max)
 const MAX_DATA_BEFORE_INSERT = MAX_NUM_NODES*600; // ~60 secs worth of data in standard config
 const MAX_DATA_BEFORE_INSERT_EVENTS = MAX_NUM_NODES*60;
 
@@ -144,13 +143,11 @@ function connectPeripheral(peripheral) {
 			if (peripheral.strainCh != null) {
 				peripheral.strainCh.on("data", function(data, isNotification) {
 					//console.log(peripheral.id + ": " + data.readInt16BE(0));
-					var gps = gps_handler.getGpsLatLon();
 					
 					// Save data to cache
 					var now = Date.now();
 					strainDataCache.push(new StrainDataPoint(now, peripheral.id,
-														data.readInt16BE(0),
-														gps.lat, gps.lon));
+														data.readInt16BE(0)));
 					
 					// Bulk DB insert when cache is full
 					if (strainDataCache.length >= MAX_DATA_BEFORE_INSERT) {
@@ -166,13 +163,11 @@ function connectPeripheral(peripheral) {
 			if (peripheral.acceleCh != null) {
 				peripheral.acceleCh.on("data", function(data, isNotification) {
 					//console.log(peripheral.id + ": " + data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
-					var gps = gps_handler.getGpsLatLon();
 					
 					// Save data to cache
 					var now = Date.now();
 					acceleDataCache.push(new AcceleDataPoint(now, peripheral.id, 
-														data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2),
-														gps.lat, gps.lon));
+														data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2)));
 					
 					// Bulk DB insert when cache is full
 					if (acceleDataCache.length >= MAX_DATA_BEFORE_INSERT) {
@@ -187,8 +182,7 @@ function connectPeripheral(peripheral) {
 						
 						if (eventTypeDetected != 0) {
 							eventDataCache.push(new EventDataPoint(now, peripheral.id,
-															valueToCheck, eventTypeDetected,
-															gps.lat, gps.lon));
+															valueToCheck, eventTypeDetected));
 							if (eventDataCache.length > MAX_DATA_BEFORE_INSERT_EVENTS) {
 								writeToEventDB();
 							}
@@ -211,8 +205,7 @@ function writeToStrainDB() {
 		while (strainDataCache.length > 0) {
 			var datapoint = strainDataCache.shift(); // dequeue
 			strainStmt.run(datapoint.timestamp, datapoint.id,
-						   datapoint.value, 
-						   datapoint.lat, datapoint.lon);
+						   datapoint.value);
 		}
 		
 		dbNodes.run("commit");
@@ -226,8 +219,7 @@ function writeToAcceleDB() {
 		while (acceleDataCache.length > 0) {
 			var datapoint = acceleDataCache.shift(); // dequeue
 			acceleStmt.run(datapoint.timestamp, datapoint.id, 
-						   datapoint.x, datapoint.y, datapoint.z, 
-						   datapoint.lat, datapoint.lon);
+						   datapoint.x, datapoint.y, datapoint.z);
 		}
 		
 		dbNodes.run("commit");
@@ -241,8 +233,7 @@ function writeToEventDB() {
 		while (eventDataCache.length > 0) {
 			var datapoint = eventDataCache.shift(); // dequeue
 			eventStmt.run(datapoint.timestamp, datapoint.id,
-						   datapoint.value, datapoint.type,
-						   datapoint.lat, datapoint.lon);
+						   datapoint.value, datapoint.type);
 		}
 		
 		dbNodes.run("commit");
