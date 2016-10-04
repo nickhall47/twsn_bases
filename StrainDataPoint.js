@@ -14,8 +14,11 @@ StrainDataPoint.prototype.print = function() {
 
 StrainDataPoint.prototype.toJsonString = function() {
 	return JSON.stringify({
-		"type":1,
 		"timestamp": this.timestamp,
 		"id": this.id,
-		"value": this.value});
+		"temperature": convertValueToDegC(this.value)});
+};
+
+function convertValueToDegC(analogValue) {
+	return ((analogValue * 1.0 / 2047) * 3 - 0.6) / 0.01;
 };

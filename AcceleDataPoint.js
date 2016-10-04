@@ -18,10 +18,14 @@ AcceleDataPoint.prototype.print = function() {
 
 AcceleDataPoint.prototype.toJsonString = function() {
 	return JSON.stringify({
-		"type":2,
 		"timestamp": this.timestamp,
 		"id": this.id,
-		"x": this.x,
-		"y": this.y,
-		"z": this.z});
+		"x": convertValueToGs(this.x),
+		"y": convertValueToGs(this.y),
+		"z": convertValueToGs(this.z)});
 };
+
+function convertValueToGs(accelValue) {
+	return accelValue * 0.004;
+};
+
