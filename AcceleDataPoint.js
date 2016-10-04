@@ -15,3 +15,13 @@ AcceleDataPoint.prototype.print = function() {
 				this.y + ", " + 
 				this.z);
 };
+
+AcceleDataPoint.prototype.toJsonString = function() {
+	return JSON.stringify({
+		"type":2,
+		"timestamp": this.timestamp,
+		"id": this.id,
+		"x": this.x,
+		"y": this.y,
+		"z": this.z});
+};

@@ -11,3 +11,11 @@ StrainDataPoint.prototype.print = function() {
 				this.id + ", " + 
 				this.value);
 };
+
+StrainDataPoint.prototype.toJsonString = function() {
+	return JSON.stringify({
+		"type":1,
+		"timestamp": this.timestamp,
+		"id": this.id,
+		"value": this.value});
+};
