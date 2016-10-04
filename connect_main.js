@@ -16,7 +16,7 @@ var EventDataPoint = require("./EventDataPoint");
 // Flags
 const EVENT_DETECTION_ENABLED_FLAG = 0;
 const AUTO_SHUTDOWN_TIMEOUT_FLAG = 0;
-const MAX_NUM_NODES = 1; // Optional (Set to 0 to have no max)
+const MAX_NUM_NODES = 4; // Optional (Set to 0 to have no max)
 const MAX_DATA_BEFORE_INSERT = MAX_NUM_NODES*600; // ~60 secs worth of data in standard config
 const MAX_DATA_BEFORE_INSERT_EVENTS = MAX_NUM_NODES*60;
 
@@ -156,9 +156,9 @@ function connectPeripheral(peripheral) {
 			}
 			if (peripheral.acceleCh != null) {
 				peripheral.acceleCh.on("data", function(data, isNotification) {
-					console.log(convertValueToGs(data.readInt16LE(1)) + "  " + 
+					/*console.log(convertValueToGs(data.readInt16LE(1)) + "  " + 
 								convertValueToGs(data.readInt16LE(3)) + "  " + 
-								convertValueToGs(data.readInt16LE(5)));
+								convertValueToGs(data.readInt16LE(5)));(*/
 					//console.log(data);
 					
 					// Create JSON from data
