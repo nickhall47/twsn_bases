@@ -156,15 +156,14 @@ function connectPeripheral(peripheral) {
 			}
 			if (peripheral.acceleCh != null) {
 				peripheral.acceleCh.on("data", function(data, isNotification) {
-					//console.log(peripheral.id + ": " + data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
-					/*console.log(convertValueToGs(data.readInt16BE(0)) + "  " + 
-								convertValueToGs(data.readInt16BE(2)) + "  " + 
-								convertValueToGs(data.readInt16BE(4)));*/
+					console.log(convertValueToGs(data.readInt16LE(1)) + "  " + 
+								convertValueToGs(data.readInt16LE(3)) + "  " + 
+								convertValueToGs(data.readInt16LE(5)));
 					//console.log(data);
 					
 					// Create JSON from data
 					var jsonString = createJsonString(Date.now(), peripheral.id, 
-													  data.readInt16BE(4), data.readInt16BE(2), data.readInt16BE(0),
+													  data.readInt16LE(1), data.readInt16LE(3), data.readInt16LE(5),
 													  temperature);
 					
 					// Send TCP
