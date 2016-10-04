@@ -43,16 +43,39 @@ var acceleDataCache = [];
 var eventDataCache = [];
 
 var tcpClient;
+var temperature;
 
 
-function initTcpConnection() {
+
+function sendJsonOverTcp(jsonString) {
 	tcpClient = new net.Socket();
 	
 	tcpClient.connect(SERVER_PORT, SERVER_ADDRESS);
 	tcpClient.on("connect", function() {
-		console.log("Connected to TCP server");
+		//console.log("Connected to TCP server, and sending json...");
+		tcpClient.write(jsonString);
+		tcpClient.destroy();
 	});
 }
+
+function createJsonString(timestamp, id, x, y, z, temperature) {
+	return JSON.stringify({
+		"timestamp": timestamp,
+		"id": id,
+		"x": convertValueToGs(x),
+		"y": convertValueToGs(y),
+		"z": convertValueToGs(z),
+		"temperature": convertValueToDegC(temperature)
+	});
+}
+
+function convertValueToGs(accelValue) {
+	return accelValue * 0.004;
+};
+
+function convertValueToDegC(analogValue) {
+	return ((analogValue * 1.0 / 2047) * 3 - 0.6) / 0.01;
+};
 
 noble.on("warning", function(msg) {
     console.log("NOBLE WARNING: " + msg);
@@ -126,29 +149,26 @@ function connectPeripheral(peripheral) {
 				peripheral.strainCh.on("data", function(data, isNotification) {
 					//console.log(peripheral.id + ": " + data.readInt16BE(0));
 					
-					// Create JSON from data
-					var jsonString = (new StrainDataPoint(Date.now(), peripheral.id, data.readInt16BE(0)
-													)).toJsonString();
-					
-					// Send TCP if connected
-					if (tcpClient.connecting == false) {
-						tcpClient.write(jsonString);
-					}
+					// Save to global
+					// (hack!!!: only works with 1 node, which is fine for demo)
+					temperature = data.readInt16BE(0);
 				});
 			}
 			if (peripheral.acceleCh != null) {
 				peripheral.acceleCh.on("data", function(data, isNotification) {
 					//console.log(peripheral.id + ": " + data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
+					/*console.log(convertValueToGs(data.readInt16BE(0)) + "  " + 
+								convertValueToGs(data.readInt16BE(2)) + "  " + 
+								convertValueToGs(data.readInt16BE(4)));*/
+					//console.log(data);
 					
 					// Create JSON from data
-					var jsonString = (new AcceleDataPoint(Date.now(), peripheral.id,
-													data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2)
-													)).toJsonString();
+					var jsonString = createJsonString(Date.now(), peripheral.id, 
+													  data.readInt16BE(4), data.readInt16BE(2), data.readInt16BE(0),
+													  temperature);
 					
-					// Send TCP if connected
-					if (tcpClient.connecting == false) {
-						tcpClient.write(jsonString);
-					}
+					// Send TCP
+					sendJsonOverTcp(jsonString);
 				});
 			}
 			
@@ -238,7 +258,7 @@ function main() {
 	}
 	
 	// Init stuff
-	initTcpConnection();
+	
 	
 	// Wait before connecting
 	console.log("\nPress any key to stop recv ad mode, and connect to peripherals (will auto-connect in 60 seconds)");
