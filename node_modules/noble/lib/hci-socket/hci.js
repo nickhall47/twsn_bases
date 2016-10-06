@@ -28,8 +28,10 @@ var OCF_DISCONNECT = 0x0006;
 
 var OGF_HOST_CTL = 0x03;
 var OCF_SET_EVENT_MASK = 0x0001;
+var OCF_RESET = 0x0003;
 var OCF_READ_LE_HOST_SUPPORTED = 0x006C;
 var OCF_WRITE_LE_HOST_SUPPORTED = 0x006D;
+
 
 var OGF_INFO_PARAM = 0x04;
 var OCF_READ_LOCAL_VERSION = 0x0001;
@@ -48,6 +50,7 @@ var OCF_LE_START_ENCRYPTION = 0x0019;
 var DISCONNECT_CMD = OCF_DISCONNECT | OGF_LINK_CTL << 10;
 
 var SET_EVENT_MASK_CMD = OCF_SET_EVENT_MASK | OGF_HOST_CTL << 10;
+var RESET_CMD = OCF_RESET | OGF_HOST_CTL << 10;
 var READ_LE_HOST_SUPPORTED_CMD = OCF_READ_LE_HOST_SUPPORTED | OGF_HOST_CTL << 10;
 var WRITE_LE_HOST_SUPPORTED_CMD = OCF_WRITE_LE_HOST_SUPPORTED | OGF_HOST_CTL << 10;
 
@@ -56,7 +59,7 @@ var READ_BD_ADDR_CMD = OCF_READ_BD_ADDR | (OGF_INFO_PARAM << 10);
 
 var READ_RSSI_CMD = OCF_READ_RSSI | OGF_STATUS_PARAM << 10;
 
-var LE_SET_EVENT_MASK_CMD = OCF_SET_EVENT_MASK | OGF_LE_CTL << 10;
+var LE_SET_EVENT_MASK_CMD = OCF_LE_SET_EVENT_MASK | OGF_LE_CTL << 10;
 var LE_SET_SCAN_PARAMETERS_CMD = OCF_LE_SET_SCAN_PARAMETERS | OGF_LE_CTL << 10;
 var LE_SET_SCAN_ENABLE_CMD = OCF_LE_SET_SCAN_ENABLE | OGF_LE_CTL << 10;
 var LE_CREATE_CONN_CMD = OCF_LE_CREATE_CONN | OGF_LE_CTL << 10;
@@ -70,6 +73,7 @@ var Hci = function() {
   this._socket = new BluetoothHciSocket();
   this._isDevUp = null;
   this._state = null;
+  this._deviceId = null;
 
   this._handleBuffers = {};
 
@@ -86,10 +90,17 @@ Hci.prototype.init = function() {
 
   var deviceId = process.env.NOBLE_HCI_DEVICE_ID ? parseInt(process.env.NOBLE_HCI_DEVICE_ID, 10) : undefined;
 
-  this._socket.bindRaw(deviceId);
-  this._socket.start();
+  if (process.env.HCI_CHANNEL_USER) {
+    this._deviceId = this._socket.bindUser(deviceId);
+    this._socket.start();
 
-  this.pollIsDevUp();
+    this.reset();
+  } else {
+    this._deviceId = this._socket.bindRaw(deviceId);
+    this._socket.start();
+
+    this.pollIsDevUp();
+  }
 };
 
 Hci.prototype.pollIsDevUp = function() {
@@ -146,6 +157,21 @@ Hci.prototype.setEventMask = function() {
   debug('set event mask - writing: ' + cmd.toString('hex'));
   this._socket.write(cmd);
 };
+
+Hci.prototype.reset = function() {
+    var cmd = new Buffer(4);
+
+  // header
+  cmd.writeUInt8(HCI_COMMAND_PKT, 0);
+  cmd.writeUInt16LE(OCF_RESET | OGF_HOST_CTL << 10, 1);
+
+  // length
+  cmd.writeUInt8(0x00, 3);
+
+  debug('reset - writing: ' + cmd.toString('hex'));
+  this._socket.write(cmd);
+};
+
 
 Hci.prototype.readLocalVersion = function() {
   var cmd = new Buffer(4);
@@ -499,12 +525,19 @@ Hci.prototype.onSocketError = function(error) {
 };
 
 Hci.prototype.processCmdCompleteEvent = function(cmd, status, result) {
-  if (cmd === READ_LE_HOST_SUPPORTED_CMD) {
-    var le = result.readUInt8(0);
-    var simul = result.readUInt8(1);
+  if (cmd === RESET_CMD) {
+    this.setEventMask();
+    this.setLeEventMask();
+    this.readLocalVersion();
+    this.readBdAddr();
+  } else if (cmd === READ_LE_HOST_SUPPORTED_CMD) {
+    if (status === 0) {
+      var le = result.readUInt8(0);
+      var simul = result.readUInt8(1);
 
-    debug('\t\t\tle = ' + le);
-    debug('\t\t\tsimul = ' + simul);
+      debug('\t\t\tle = ' + le);
+      debug('\t\t\tsimul = ' + simul);
+    }
   } else if (cmd === READ_LOCAL_VERSION_CMD) {
     var hciVer = result.readUInt8(0);
     var hciRev = result.readUInt16LE(1);
