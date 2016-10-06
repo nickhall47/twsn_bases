@@ -1,13 +1,11 @@
 module.exports = AcceleDataPoint;
 
-function AcceleDataPoint(timestamp, id, x, y, z, lat, lon) {
+function AcceleDataPoint(timestamp, id, x, y, z) {
 	this.timestamp = timestamp;
 	this.id = id;
 	this.x = x;
 	this.y = y;
 	this.z = z;
-	this.lat = lat;
-	this.lon = lon;
 }
 
 AcceleDataPoint.prototype.print = function() {
@@ -15,7 +13,5 @@ AcceleDataPoint.prototype.print = function() {
 				this.id + ", " + 
 				this.x + ", " + 
 				this.y + ", " + 
-				this.z + ", " + 
-				this.lat + ", " + 
-				this.lon);
+				this.z);
 };
