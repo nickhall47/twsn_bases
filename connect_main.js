@@ -165,13 +165,13 @@ function connectPeripheral(peripheral) {
 			}
 			if (peripheral.acceleCh != null) {
 				peripheral.acceleCh.on("data", function(data, isNotification) {
-					//console.log(peripheral.id + ": " + data.readInt16BE(0) + "," + data.readInt16BE(1) + "," + data.readInt16BE(2));
+					//console.log(peripheral.id + ": " + data.readInt16LE(1) + "," + data.readInt16LE(3) + "," + data.readInt16LE(5));
 					var gps = gps_handler.getGpsLatLon();
 					
 					// Save data to cache
 					var now = Date.now();
 					acceleDataCache.push(new AcceleDataPoint(now, peripheral.id, 
-														data.readInt16BE(0), data.readInt16BE(1), data.readInt16BE(2),
+														data.readInt16LE(1), data.readInt16LE(3), data.readInt16LE(5),
 														gps.lat, gps.lon));
 					
 					// Bulk DB insert when cache is full
@@ -181,7 +181,7 @@ function connectPeripheral(peripheral) {
 					
 					// Check for event
 					if (EVENT_DETECTION_ENABLED_FLAG == 1) {
-						var valueToCheck = data.readInt16BE(1);
+						var valueToCheck = data.readInt16LE(1);
 						
 						var eventTypeDetected = event_detection.eventDetect(peripheral, valueToCheck);
 						
